@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ScoRev — Automated Code Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+--bg:#0b0f17;
+--bg2:#111622;
+--bg3:#161d2e;
+--bg4:#1c2540;
+--border:#1e2d4a;
+--border2:#243354;
+--text:#e2e8f5;
+--text2:#8899bb;
+--text3:#4a5f80;
+--blue:#2d7df7;
+--blue2:#1a5fd4;
+--cyan:#00d4ff;
+--cyan2:#0099cc;
+--gold:#c8a84b;
+--green:#22c55e;
+--yellow:#f59e0b;
+--red:#ef4444;
+--sidebar:220px;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;overflow:hidden;font-size:14px}
+
+/* SIDEBAR */
+.sidebar{width:var(--sidebar);background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0}
+.logo{padding:20px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.logo svg{width:36px;height:36px;flex-shrink:0}
+.logo-text{font-size:18px;font-weight:600;letter-spacing:.5px}
+.logo-text span{color:var(--blue)}
+.nav{padding:12px 8px;flex:1}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:8px;cursor:pointer;color:var(--text2);font-size:13px;transition:all .15s;margin-bottom:2px}
+.nav-item:hover{background:var(--bg3);color:var(--text)}
+.nav-item.active{background:var(--bg4);color:var(--blue);border:1px solid var(--border2)}
+.nav-item svg{width:17px;height:17px;flex-shrink:0}
+.sidebar-footer{padding:12px 8px;border-top:1px solid var(--border)}
+.version{font-size:11px;color:var(--text3);padding:8px 12px}
+
+/* MAIN */
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.topbar{height:52px;background:var(--bg2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;padding:0 16px;flex-shrink:0}
+.file-tab{display:flex;align-items:center;gap:8px;background:var(--bg3);border:1px solid var(--border2);border-radius:8px;padding:5px 12px;font-size:13px;color:var(--text)}
+.file-tab svg{width:14px;height:14px;color:var(--blue)}
+.topbar-btn{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;font-family:inherit}
+.topbar-btn:hover{background:var(--bg3);color:var(--text)}
+.topbar-btn svg{width:14px;height:14px}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.history-btn{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;border:1px solid var(--border2);background:transparent;color:var(--text2);font-size:12px;cursor:pointer;transition:all .15s;font-family:inherit}
+.history-btn:hover{background:var(--bg3);color:var(--text)}
+
+/* CONTENT */
+.content{flex:1;display:grid;grid-template-columns:1fr 380px;overflow:hidden}
+
+/* EDITOR PANEL */
+.editor-panel{display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden}
+.editor-header{padding:10px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;background:var(--bg2);font-size:12px;color:var(--text2);flex-shrink:0}
+.editor-header span{color:var(--text3)}
+.editor-wrap{flex:1;position:relative;overflow:hidden}
+#editor{width:100%;height:100%}
+.editor-footer{padding:8px 16px;border-top:1px solid var(--border);background:var(--bg2);flex-shrink:0}
+.analyze-btn{width:100%;padding:11px;background:linear-gradient(135deg,var(--blue),var(--blue2));border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;letter-spacing:.3px}
+.analyze-btn:hover{opacity:.9;transform:translateY(-1px)}
+.analyze-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+.analyze-btn svg{width:16px;height:16px}
+.drop-hint{font-size:11px;color:var(--text3);text-align:center;margin-top:6px}
+
+/* RESULTS PANEL */
+.results-panel{display:flex;flex-direction:column;overflow-y:auto;background:var(--bg)}
+.results-panel::-webkit-scrollbar{width:4px}
+.results-panel::-webkit-scrollbar-track{background:transparent}
+.results-panel::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+
+/* OVERVIEW */
+.overview{padding:16px;border-bottom:1px solid var(--border)}
+.overview-title{font-size:11px;font-weight:600;color:var(--text3);letter-spacing:1px;text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:6px}
+.overview-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.score-main{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px}
+.gauge-wrap{position:relative;width:80px;height:80px}
+.gauge-wrap svg{width:80px;height:80px}
+.gauge-num{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column}
+.gauge-num .num{font-size:20px;font-weight:600;line-height:1}
+.gauge-num .denom{font-size:10px;color:var(--text3)}
+.score-label{font-size:12px;font-weight:500;color:var(--text2)}
+.score-grade{font-size:11px;color:var(--green);font-weight:500}
+.confidence-box{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
+.conf-label{font-size:10px;color:var(--text3);font-weight:600;letter-spacing:.8px;text-transform:uppercase}
+.conf-badge{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;font-size:13px;font-weight:600;width:fit-content}
+.conf-badge.HIGH{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3)}
+.conf-badge.MEDIUM{background:rgba(245,158,11,.15);color:var(--yellow);border:1px solid rgba(245,158,11,.3)}
+.conf-badge.LOW{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+.conf-dots{display:flex;gap:4px;margin-top:4px}
+.conf-dot{width:8px;height:8px;border-radius:50%;background:var(--border2)}
+.conf-dot.active{background:var(--green)}
+.conf-desc{font-size:11px;color:var(--text3);line-height:1.5}
+
+/* 3 SCORES */
+.scores-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:0 16px 16px;border-bottom:1px solid var(--border)}
+.score-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.score-card .icon{width:20px;height:20px}
+.score-card .title{font-size:10px;color:var(--text2);font-weight:500}
+.score-card .val{font-size:16px;font-weight:600}
+.score-card .lbl{font-size:10px;font-weight:500}
+.score-bar{width:100%;height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+.score-bar-fill{height:100%;border-radius:2px;transition:width .8s ease}
+
+/* TABS */
+.tabs-wrap{border-bottom:1px solid var(--border);display:flex;padding:0 16px;flex-shrink:0}
+.tab{padding:10px 12px;font-size:12px;font-weight:500;color:var(--text3);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap}
+.tab:hover{color:var(--text2)}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.tab-badge{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;background:var(--bg4);font-size:10px;margin-left:4px}
+
+/* TAB CONTENT */
+.tab-content{padding:12px 16px;display:none}
+.tab-content.active{display:block}
+
+/* ISSUES */
+.issue-item{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px;display:flex;gap:10px;align-items:flex-start}
+.issue-sev{padding:3px 8px;border-radius:6px;font-size:10px;font-weight:600;flex-shrink:0;margin-top:1px}
+.issue-sev.HIGH{background:rgba(239,68,68,.15);color:var(--red)}
+.issue-sev.MEDIUM{background:rgba(245,158,11,.15);color:var(--yellow)}
+.issue-sev.LOW{background:rgba(34,197,94,.15);color:var(--green)}
+.issue-name{font-size:12px;font-weight:500;color:var(--text);margin-bottom:3px}
+.issue-loc{font-size:11px;color:var(--blue);font-family:'JetBrains Mono',monospace}
+.issue-desc{font-size:11px;color:var(--text2);line-height:1.5;margin-top:4px}
+
+/* RECS */
+.rec-item{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:8px}
+.rec-header{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px}
+.rec-text{font-size:12px;color:var(--text);line-height:1.5;flex:1}
+.show-fix-btn{padding:4px 10px;background:var(--bg4);border:1px solid var(--border2);border-radius:6px;color:var(--cyan);font-size:11px;cursor:pointer;font-family:inherit;white-space:nowrap;transition:all .15s}
+.show-fix-btn:hover{background:rgba(0,212,255,.1)}
+.fix-block{display:none;margin-top:8px;border-top:1px solid var(--border);padding-top:8px}
+.fix-block.open{display:block}
+.fix-warning{font-size:10px;color:var(--yellow);margin-bottom:6px;display:flex;align-items:center;gap:4px}
+.fix-code{background:var(--bg);border:1px solid var(--border2);border-radius:8px;padding:10px;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--cyan);white-space:pre-wrap;word-break:break-all;max-height:200px;overflow-y:auto;position:relative}
+.copy-btn{position:absolute;top:6px;right:6px;padding:3px 8px;background:var(--bg4);border:1px solid var(--border2);border-radius:5px;color:var(--text2);font-size:10px;cursor:pointer;font-family:inherit}
+
+/* LLM INSIGHTS */
+.reasoning-box{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:10px}
+.reasoning-label{font-size:10px;color:var(--text3);font-weight:600;letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.reasoning-text{font-size:12px;color:var(--text2);line-height:1.7}
+.assessment-box{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px}
+.assess-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.assess-tag{padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600}
+.assess-tag.ACCURATE{background:rgba(34,197,94,.15);color:var(--green);border:1px solid rgba(34,197,94,.3)}
+.assess-tag.FALSE_POSITIVE{background:rgba(245,158,11,.15);color:var(--yellow);border:1px solid rgba(245,158,11,.3)}
+.assess-tag.FALSE_NEGATIVE{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+.assess-reason{font-size:11px;color:var(--text2);line-height:1.6}
+
+/* METRICS */
+.metric-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border)}
+.metric-row:last-child{border-bottom:none}
+.metric-name{font-size:12px;color:var(--text2)}
+.metric-val{font-size:12px;font-weight:500;font-family:'JetBrains Mono',monospace;color:var(--blue)}
+
+/* HISTORY DRAWER */
+.history-drawer{position:fixed;top:0;right:-320px;width:300px;height:100vh;background:var(--bg2);border-left:1px solid var(--border);z-index:100;transition:right .3s;display:flex;flex-direction:column}
+.history-drawer.open{right:0}
+.history-header{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.history-header h3{font-size:14px;font-weight:500}
+.close-history{background:none;border:none;color:var(--text3);cursor:pointer;padding:4px}
+.close-history:hover{color:var(--text)}
+.history-list{flex:1;overflow-y:auto;padding:8px}
+.history-item{padding:10px 12px;border-radius:8px;cursor:pointer;margin-bottom:4px;border:1px solid transparent;transition:all .15s}
+.history-item:hover{background:var(--bg3);border-color:var(--border)}
+.history-item .hi-name{font-size:12px;font-weight:500;color:var(--text);margin-bottom:3px}
+.history-item .hi-scores{display:flex;gap:8px;font-size:10px;color:var(--text3)}
+.history-item .hi-dot{width:6px;height:6px;border-radius:50%}
+.history-item .hi-time{font-size:10px;color:var(--text3);margin-top:3px}
+.history-empty{padding:20px;text-align:center;color:var(--text3);font-size:12px}
+
+/* LOADING */
+.loading-overlay{position:absolute;inset:0;background:rgba(11,15,23,.85);display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;z-index:10;border-radius:10px}
+.loading-overlay.show{display:flex}
+.spinner{width:32px;height:32px;border:3px solid var(--border2);border-top-color:var(--blue);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-text{font-size:12px;color:var(--text2)}
+
+/* EMPTY STATE */
+.empty-state{padding:60px 24px;text-align:center;color:var(--text3)}
+.empty-state .empty-logo{width:96px;height:96px;margin:0 auto 20px;display:block;filter:drop-shadow(0 0 24px rgba(45,125,247,.25))}
+.empty-state .empty-title{font-size:15px;font-weight:600;color:var(--text2);margin-bottom:8px;letter-spacing:.3px}
+.empty-state .empty-sub{font-size:12px;line-height:1.7;color:var(--text3)}
+
+/* FOOTER BAR */
+.footer-bar{height:28px;background:var(--bg2);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:16px;font-size:11px;color:var(--text3);flex-shrink:0}
+.footer-dot{width:6px;height:6px;border-radius:50%;background:var(--green)}
+.footer-item{display:flex;align-items:center;gap:5px}
+
+/* IMPORTANCE SLIDERS */
+.weights-box{background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+.weights-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.weights-title{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--text2);font-weight:600}
+.weights-reset{font-size:10px;color:var(--blue);cursor:pointer;background:transparent;border:none;font-family:inherit;padding:2px 6px;border-radius:4px;transition:all .15s}
+.weights-reset:hover{background:var(--bg4);color:var(--cyan)}
+.weight-row{display:grid;grid-template-columns:90px 1fr 38px;align-items:center;gap:10px;margin-bottom:8px}
+.weight-row:last-child{margin-bottom:0}
+.weight-label{font-size:11px;color:var(--text2);display:flex;align-items:center;gap:6px}
+.weight-label .dot{width:8px;height:8px;border-radius:50%}
+.weight-slider{-webkit-appearance:none;width:100%;height:4px;background:var(--bg4);border-radius:2px;outline:none;cursor:pointer}
+.weight-slider::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;border-radius:50%;background:var(--blue);cursor:pointer;border:2px solid var(--bg);box-shadow:0 0 0 1px var(--blue)}
+.weight-slider::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--blue);cursor:pointer;border:2px solid var(--bg);box-shadow:0 0 0 1px var(--blue)}
+.weight-value{font-size:11px;color:var(--text);text-align:right;font-variant-numeric:tabular-nums;font-weight:500}
+
+/* COLLAPSIBLE INSIGHT CARDS */
+.insight-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;margin-bottom:10px;overflow:hidden;transition:all .15s}
+.insight-card:hover{border-color:var(--border2)}
+.insight-header{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;cursor:pointer;user-select:none}
+.insight-header-left{display:flex;align-items:center;gap:9px;font-size:12px;color:var(--text);font-weight:500}
+.insight-num{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;background:var(--blue);color:#fff;font-size:10px;font-weight:600}
+.insight-chevron{transition:transform .2s;color:var(--text3)}
+.insight-card.open .insight-chevron{transform:rotate(180deg)}
+.insight-body{padding:0 14px;max-height:0;overflow:hidden;transition:max-height .3s ease,padding .3s ease;font-size:12px;line-height:1.7;color:var(--text2)}
+.insight-card.open .insight-body{max-height:1500px;padding:0 14px 14px 14px}
+.insight-body p{margin-bottom:8px}
+
+/* SEMANTIC ISSUES (model-found) */
+.semantic-item{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:8px;display:flex;gap:11px}
+.semantic-item:hover{border-color:var(--border2)}
+.semantic-tag{flex-shrink:0;font-size:9px;font-weight:700;padding:3px 8px;border-radius:4px;background:rgba(0,212,255,.12);color:var(--cyan);letter-spacing:.5px;height:fit-content;border:1px solid rgba(0,212,255,.25)}
+.semantic-content{flex:1}
+.semantic-loc{font-size:10px;color:var(--text3);margin-bottom:3px;font-family:'JetBrains Mono',monospace}
+.semantic-text{font-size:12px;color:var(--text);line-height:1.55}
+
+/* RECOMMENDATION FIX (kept) - UPDATED LAYOUT for line+action */
+.rec-line-tag{display:inline-block;font-size:10px;font-family:'JetBrains Mono',monospace;color:var(--cyan);background:rgba(0,212,255,.1);padding:2px 7px;border-radius:4px;margin-right:8px;border:1px solid rgba(0,212,255,.2)}
+
+input[type=file]{display:none}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="logo">
+    <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M18 2L32 10V20C32 26.5 26 32 18 34C10 32 4 26.5 4 20V10L18 2Z" fill="#1a3a6e" stroke="#2d7df7" stroke-width="1.5"/>
+      <path d="M12 18L16 22L24 14" stroke="#00d4ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="26" cy="8" r="1.5" fill="#2d7df7" opacity=".8"/>
+      <circle cx="29" cy="11" r="1" fill="#2d7df7" opacity=".6"/>
+      <line x1="26" y1="8" x2="29" y2="11" stroke="#2d7df7" stroke-width="1" opacity=".5"/>
+    </svg>
+    <div class="logo-text">Sco<span>Rev</span></div>
+  </div>
+  <nav class="nav">
+    <div class="nav-item active">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      Analysis
+    </div>
+    <div class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      Dashboard
+    </div>
+    <div class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      Projects
+    </div>
+    <div class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8m8 4H8m2-8H8"/></svg>
+      Reports
+    </div>
+    <div class="nav-item" id="historyNavBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      History
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="nav-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+      Settings
+    </div>
+    <div class="version">ScoRev v2.0 · B++ Pipeline</div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="file-tab">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+      <span id="fileNameDisplay">untitled.py</span>
+    </div>
+    <button class="topbar-btn" onclick="document.getElementById('fileInput').click()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Upload
+    </button>
+    <button class="topbar-btn" onclick="loadExample()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Examples
+    </button>
+    <div class="topbar-right">
+      <button class="history-btn" id="historyBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        History
+      </button>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- EDITOR PANEL -->
+    <div class="editor-panel">
+      <div class="editor-header">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        Python &nbsp;<span>·</span>&nbsp; <span id="lineCount">0 lines</span>
+      </div>
+      <div class="editor-wrap" id="editorWrap">
+        <div id="editor"></div>
+      </div>
+      <div class="editor-footer">
+        <button class="analyze-btn" id="analyzeBtn" onclick="runAnalysis()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Analyze Code
+        </button>
+        <div class="drop-hint">or drag & drop a .py file</div>
+      </div>
+    </div>
+
+    <!-- RESULTS PANEL -->
+    <div class="results-panel" id="resultsPanel">
+
+      <!-- EMPTY STATE -->
+      <div class="empty-state" id="emptyState">
+        <svg class="empty-logo" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- Shield outline -->
+          <path d="M60 8L100 26V60C100 80 84 96 60 104C36 96 20 80 20 60V26L60 8Z"
+                fill="url(#shieldGrad)" stroke="#2d7df7" stroke-width="2" opacity="0.95"/>
+          <!-- Checkmark -->
+          <path d="M38 58L52 72L82 42" stroke="#00d4ff" stroke-width="5"
+                stroke-linecap="round" stroke-linejoin="round"/>
+          <!-- Circuit decoration -->
+          <circle cx="86" cy="22" r="3.5" fill="#2d7df7" opacity="0.9"/>
+          <circle cx="96" cy="32" r="2.5" fill="#00d4ff" opacity="0.7"/>
+          <line x1="86" y1="22" x2="96" y2="32" stroke="#2d7df7" stroke-width="1.5" opacity="0.5"/>
+          <circle cx="24" cy="40" r="2" fill="#2d7df7" opacity="0.6"/>
+          <line x1="24" y1="40" x2="20" y2="34" stroke="#2d7df7" stroke-width="1" opacity="0.4"/>
+          <defs>
+            <linearGradient id="shieldGrad" x1="20" y1="8" x2="100" y2="104" gradientUnits="userSpaceOnUse">
+              <stop offset="0%" stop-color="#1a3a6e"/>
+              <stop offset="100%" stop-color="#0a1d3a"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <p class="empty-title">ScoRev — Code Quality Analyzer</p>
+        <p class="empty-sub">Paste or upload Python code<br>then click Analyze Code</p>
+      </div>
+
+      <!-- RESULTS (hidden until analysis) -->
+      <div id="resultsContent" style="display:none">
+
+        <!-- OVERVIEW -->
+        <div class="overview">
+          <div class="overview-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            Analysis Overview
+          </div>
+
+          <!-- IMPORTANCE SLIDERS — customise overall weighting -->
+          <div class="weights-box">
+            <div class="weights-header">
+              <div class="weights-title">📊 Customize Importance</div>
+              <button class="weights-reset" onclick="resetWeights()">Reset</button>
+            </div>
+            <div class="weight-row">
+              <div class="weight-label"><span class="dot" style="background:#2d7df7"></span>Security</div>
+              <input type="range" class="weight-slider" id="wSec" min="0" max="100" value="35"
+                     oninput="onWeightChange('security', this.value)">
+              <div class="weight-value" id="wSecVal">35%</div>
+            </div>
+            <div class="weight-row">
+              <div class="weight-label"><span class="dot" style="background:#00d4ff"></span>Complexity</div>
+              <input type="range" class="weight-slider" id="wCmp" min="0" max="100" value="35"
+                     oninput="onWeightChange('complexity', this.value)">
+              <div class="weight-value" id="wCmpVal">35%</div>
+            </div>
+            <div class="weight-row">
+              <div class="weight-label"><span class="dot" style="background:#c8a84b"></span>Maintainability</div>
+              <input type="range" class="weight-slider" id="wMnt" min="0" max="100" value="30"
+                     oninput="onWeightChange('maintainability', this.value)">
+              <div class="weight-value" id="wMntVal">30%</div>
+            </div>
+          </div>
+
+          <!-- OVERALL GAUGE (full width now that confidence is moved to Metrics tab) -->
+          <div class="score-main">
+            <div class="gauge-wrap">
+              <svg viewBox="0 0 80 80">
+                <circle cx="40" cy="40" r="32" fill="none" stroke="#1e2d4a" stroke-width="6"/>
+                <circle id="overallGauge" cx="40" cy="40" r="32" fill="none" stroke="#2d7df7" stroke-width="6"
+                  stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="201"
+                  transform="rotate(-90 40 40)" style="transition:stroke-dashoffset 1s ease"/>
+              </svg>
+              <div class="gauge-num">
+                <span class="num" id="overallNum">—</span>
+                <span class="denom">/10</span>
+              </div>
+            </div>
+            <div class="score-label">Overall Score (weighted)</div>
+            <div class="score-grade" id="overallGrade">—</div>
+          </div>
+        </div>
+
+        <!-- 3 SCORES -->
+        <div class="scores-row">
+          <div class="score-card">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#2d7df7" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            <div class="title">Security</div>
+            <div class="val" id="secVal">—</div>
+            <div class="lbl" id="secLbl" style="color:var(--text3)">—</div>
+            <div class="score-bar"><div class="score-bar-fill" id="secBar" style="width:0%;background:#2d7df7"></div></div>
+          </div>
+          <div class="score-card">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#00d4ff" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+            <div class="title">Complexity</div>
+            <div class="val" id="cmpVal">—</div>
+            <div class="lbl" id="cmpLbl" style="color:var(--text3)">—</div>
+            <div class="score-bar"><div class="score-bar-fill" id="cmpBar" style="width:0%;background:#00d4ff"></div></div>
+          </div>
+          <div class="score-card">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="#c8a84b" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+            <div class="title">Maintainability</div>
+            <div class="val" id="mntVal">—</div>
+            <div class="lbl" id="mntLbl" style="color:var(--text3)">—</div>
+            <div class="score-bar"><div class="score-bar-fill" id="mntBar" style="width:0%;background:#c8a84b"></div></div>
+          </div>
+        </div>
+
+        <!-- TABS -->
+        <div class="tabs-wrap">
+          <div class="tab active" onclick="switchTab('issues',this)">Issues <span class="tab-badge" id="issueCount">0</span></div>
+          <div class="tab" onclick="switchTab('semantic',this)">Semantic Issues <span class="tab-badge" id="semanticCount">0</span></div>
+          <div class="tab" onclick="switchTab('recs',this)">Recommendations <span class="tab-badge" id="recCount">0</span></div>
+          <div class="tab" onclick="switchTab('llm',this)">AI Reasoning</div>
+          <div class="tab" onclick="switchTab('metrics',this)">Metrics</div>
+        </div>
+
+        <!-- ISSUES TAB -->
+        <div class="tab-content active" id="tab-issues">
+          <div id="issuesList"></div>
+        </div>
+
+        <!-- SEMANTIC ISSUES TAB (model-found, beyond static) -->
+        <div class="tab-content" id="tab-semantic">
+          <div id="semanticList"></div>
+        </div>
+
+        <!-- RECS TAB -->
+        <div class="tab-content" id="tab-recs">
+          <div id="recsList"></div>
+        </div>
+
+        <!-- LLM TAB -->
+        <div class="tab-content" id="tab-llm">
+          <div id="llmContent"></div>
+        </div>
+
+        <!-- METRICS TAB -->
+        <div class="tab-content" id="tab-metrics">
+          <div id="metricsList"></div>
+        </div>
+
+      </div>
+
+      <!-- LOADING OVERLAY -->
+      <div class="loading-overlay" id="loadingOverlay">
+        <div class="spinner"></div>
+        <div class="loading-text" id="loadingText">Running static analysis...</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <div class="footer-bar">
+    <div class="footer-item"><div class="footer-dot"></div> API Connected</div>
+    <div class="footer-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/></svg>
+      <span id="lastAnalyzed">—</span>
+    </div>
+    <div class="footer-item" style="margin-left:auto">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8m-4-4v4"/></svg>
+      Static Analyzer
+    </div>
+    <div class="footer-item">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="11" height="11"><circle cx="12" cy="12" r="10"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/><path d="M2 12h20"/></svg>
+      LLM · Qwen2.5-3B
+    </div>
+  </div>
+</main>
+
+<!-- HISTORY DRAWER -->
+<div class="history-drawer" id="historyDrawer">
+  <div class="history-header">
+    <h3>Analysis History</h3>
+    <button class="close-history" onclick="closeHistory()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+  </div>
+  <div class="history-list" id="historyList">
+    <div class="history-empty">No analysis history yet</div>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept=".py" onchange="handleFileUpload(event)">
+
+<!-- Monaco Editor -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+<script>
+const API = 'https://container-betty-circuits-condo.trycloudflare.com';
+let editor, currentResult = null, history = [];
+let currentScores = null;   // engine scores, refreshed every analysis
+
+// ── USER WEIGHTS (for overall score) ──────────────────────────────────────────
+// Default weights match api.py: 35% / 35% / 30%
+const DEFAULT_WEIGHTS = { security: 35, complexity: 35, maintainability: 30 };
+let userWeights = loadWeights();
+
+function loadWeights(){
+  try{
+    const raw = localStorage.getItem('scorev_weights');
+    if(raw){
+      const w = JSON.parse(raw);
+      if (typeof w.security==='number' && typeof w.complexity==='number' && typeof w.maintainability==='number') {
+        return w;
+      }
+    }
+  }catch(e){}
+  return {...DEFAULT_WEIGHTS};
+}
+
+function saveWeights(){
+  try{ localStorage.setItem('scorev_weights', JSON.stringify(userWeights)); }catch(e){}
+}
+
+function applyWeightsToUI(){
+  document.getElementById('wSec').value = userWeights.security;
+  document.getElementById('wCmp').value = userWeights.complexity;
+  document.getElementById('wMnt').value = userWeights.maintainability;
+  document.getElementById('wSecVal').textContent = userWeights.security + '%';
+  document.getElementById('wCmpVal').textContent = userWeights.complexity + '%';
+  document.getElementById('wMntVal').textContent = userWeights.maintainability + '%';
+}
+
+function onWeightChange(dim, newVal){
+  newVal = parseInt(newVal, 10);
+  if (isNaN(newVal)) return;
+
+  // Auto-normalise: redistribute the remainder proportionally to the other two
+  const others = ['security','complexity','maintainability'].filter(d => d !== dim);
+  const remain = 100 - newVal;
+  const otherSum = userWeights[others[0]] + userWeights[others[1]];
+
+  if (otherSum > 0) {
+    userWeights[others[0]] = Math.round(remain * userWeights[others[0]] / otherSum);
+    userWeights[others[1]] = remain - userWeights[others[0]];  // ensure exact 100
+  } else {
+    userWeights[others[0]] = Math.round(remain / 2);
+    userWeights[others[1]] = remain - userWeights[others[0]];
+  }
+  userWeights[dim] = newVal;
+
+  applyWeightsToUI();
+  saveWeights();
+  updateOverallGauge();
+}
+
+function resetWeights(){
+  userWeights = {...DEFAULT_WEIGHTS};
+  applyWeightsToUI();
+  saveWeights();
+  updateOverallGauge();
+}
+
+function updateOverallGauge(){
+  if (!currentScores) return;
+  const overall = (
+    userWeights.security        * currentScores.security        +
+    userWeights.complexity      * currentScores.complexity      +
+    userWeights.maintainability * currentScores.maintainability
+  ) / 100;
+  const circ = 201;
+  const off  = circ - (overall / 10) * circ;
+  document.getElementById('overallGauge').style.strokeDashoffset = off;
+  document.getElementById('overallNum').textContent = overall.toFixed(1);
+  document.getElementById('overallGrade').textContent = gradeFromScore(overall);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Init Monaco
+require.config({paths:{vs:'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs'}});
+require(['vs/editor/editor.main'],function(){
+  editor = monaco.editor.create(document.getElementById('editor'),{
+    value:`def get_user(user_id):\n    query = "SELECT * FROM users WHERE id = " + str(user_id)\n    return db.execute(query)\n`,
+    language:'python',
+    theme:'vs-dark',
+    fontSize:13,
+    fontFamily:"'JetBrains Mono',monospace",
+    minimap:{enabled:false},
+    scrollBeyondLastLine:false,
+    lineNumbers:'on',
+    renderLineHighlight:'line',
+    padding:{top:12},
+    automaticLayout:true
+  });
+  updateLineCount();
+  editor.onDidChangeModelContent(updateLineCount);
+});
+
+function updateLineCount(){
+  if(!editor)return;
+  const n = editor.getModel().getLineCount();
+  document.getElementById('lineCount').textContent = n+' line'+(n!==1?'s':'');
+}
+
+// File upload
+function handleFileUpload(e){
+  const f=e.target.files[0];
+  if(!f)return;
+  document.getElementById('fileNameDisplay').textContent=f.name;
+  const r=new FileReader();
+  r.onload=ev=>{if(editor)editor.setValue(ev.target.result);};
+  r.readAsText(f);
+}
+
+// Example code
+function loadExample(){
+  const ex=`import os, subprocess
+
+class DataProcessor:
+    def __init__(self, db_conn):
+        self.conn = db_conn
+        self.cache = {}
+
+    def process_user_data(self, user_id, query_filter):
+        sql = "SELECT * FROM users WHERE id = " + str(user_id)
+        result = self.conn.execute(sql)
+        for row in result:
+            for key in row:
+                for item in row[key]:
+                    if item not in self.cache:
+                        self.cache[item] = subprocess.run(
+                            query_filter, shell=True
+                        )
+        return self.cache
+
+    def export_data(self, path):
+        os.system("cp data.db " + path)
+        with open(path) as f:
+            return f.read()
+`;
+  if(editor)editor.setValue(ex);
+  document.getElementById('fileNameDisplay').textContent='example.py';
+}
+
+// Analysis
+async function runAnalysis(){
+  const code=editor?editor.getValue():'';
+  if(!code.trim()){alert('Please enter some Python code first.');return;}
+  setLoading(true);
+  try{
+    const steps=['Running static analysis...','Generating LLM reasoning...','Cross-validating scores...'];
+    let si=0;
+    const si2=setInterval(()=>{
+      document.getElementById('loadingText').textContent=steps[si%steps.length];
+      si++;
+    },2000);
+    const res=await fetch(`${API}/analyze`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({code,source_name:document.getElementById('fileNameDisplay').textContent})
+    });
+    clearInterval(si2);
+    if(!res.ok){const e=await res.json();throw new Error(e.detail||'API error');}
+    const data=await res.json();
+    currentResult=data;
+    renderResults(data);
+    saveHistory(data);
+    document.getElementById('lastAnalyzed').textContent='Last: '+new Date().toLocaleTimeString();
+  }catch(e){
+    alert('Analysis error: '+e.message+'\n\nMake sure the API is running: python api.py');
+  }finally{setLoading(false);}
+}
+
+function setLoading(v){
+  const o=document.getElementById('loadingOverlay');
+  const b=document.getElementById('analyzeBtn');
+  o.classList.toggle('show',v);
+  b.disabled=v;
+  if(v){
+    document.getElementById('emptyState').style.display='none';
+    document.getElementById('resultsContent').style.display='none';
+  }
+}
+
+function renderResults(d){
+  document.getElementById('emptyState').style.display='none';
+  document.getElementById('resultsContent').style.display='block';
+
+  // Store current scores so weight sliders can recompute overall on the fly
+  currentScores = d.scores;
+
+  // 3 dimension scores (engine ground truth)
+  renderScore('sec',d.scores.security,d.labels.security,'#2d7df7');
+  renderScore('cmp',d.scores.complexity,d.labels.complexity,'#00d4ff');
+  renderScore('mnt',d.scores.maintainability,d.labels.maintainability,'#c8a84b');
+
+  // Overall gauge — uses USER weights
+  updateOverallGauge();
+
+  // Engine Issues
+  const issues=d.issues||[];
+  document.getElementById('issueCount').textContent=issues.length;
+  const il=document.getElementById('issuesList');
+  il.innerHTML=issues.length?issues.map(renderIssue).join('')
+    :'<div class="history-empty">No issues detected</div>';
+
+  // Semantic Issues (model-found complementary issues, beyond static)
+  const sem=d.complementary_issues||[];
+  document.getElementById('semanticCount').textContent=sem.length;
+  const sl=document.getElementById('semanticList');
+  sl.innerHTML=sem.length?sem.map(renderSemanticIssue).join('')
+    :'<div class="history-empty">No additional semantic issues detected</div>';
+
+  // Recommendations (model)
+  const recs=d.recommendations||[];
+  document.getElementById('recCount').textContent=recs.length;
+  const rl=document.getElementById('recsList');
+  rl.innerHTML=recs.length?recs.map((r,i)=>renderRec(r,i)).join('')
+    :'<div class="history-empty">No recommendations</div>';
+
+  // AI Reasoning (insights as collapsible cards)
+  document.getElementById('llmContent').innerHTML=renderLLM(d);
+
+  // Metrics tab (engine + model + cv)
+  document.getElementById('metricsList').innerHTML=renderMetrics(d);
+}
+
+function renderScore(pfx,val,lbl,color){
+  document.getElementById(pfx+'Val').textContent=val.toFixed(2)+'/10';
+  document.getElementById(pfx+'Lbl').textContent=lbl||'';
+  document.getElementById(pfx+'Lbl').style.color=scoreColor(val);
+  document.getElementById(pfx+'Bar').style.width=(val*10)+'%';
+  document.getElementById(pfx+'Bar').style.background=color;
+}
+
+function renderIssue(i){
+  return`<div class="issue-item">
+    <span class="issue-sev ${i.severity||'LOW'}">${i.severity||'INFO'}</span>
+    <div>
+      <div class="issue-name">${i.issue||i.type||'Issue'}</div>
+      ${i.line?`<div class="issue-loc">line ${i.line}</div>`:''}
+      <div class="issue-desc">${i.description||i.message||''}</div>
+    </div>
+  </div>`;
+}
+
+function renderRec(r,idx){
+  // r = {line: int, action: string}  (model output schema)
+  const actionText = (typeof r==='object' && r!==null) ? (r.action || '') : String(r);
+  const lineTag    = (typeof r==='object' && r!==null && r.line!=null && r.line!==0)
+                       ? `<span class="rec-line-tag">Line ${r.line}</span>` : '';
+  const encAction  = encodeURIComponent(actionText);
+  return`<div class="rec-item">
+    <div class="rec-header">
+      <div class="rec-text">${idx+1}. ${lineTag}${actionText}</div>
+      <button class="show-fix-btn" onclick="toggleFix(${idx},this,'${encAction}')">Show Fix</button>
+    </div>
+    <div class="fix-block" id="fix-${idx}">
+      <div class="fix-warning">⚠ AI-generated — review before use</div>
+      <div class="fix-code" id="fix-code-${idx}">Loading...</div>
+    </div>
+  </div>`;
+}
+
+function renderSemanticIssue(s){
+  // s = {dimension?, line?, issue: string}  — dimension intentionally not displayed
+  // (model occasionally mislabels dimension; issue text itself is reliable)
+  const lineTxt = (s.line!=null && s.line!==0) ? `Line ${s.line}` : 'File-level';
+  const text    = s.issue || s.description || '';
+  return`<div class="semantic-item">
+    <span class="semantic-tag">AI</span>
+    <div class="semantic-content">
+      <div class="semantic-loc">${lineTxt}</div>
+      <div class="semantic-text">${text}</div>
+    </div>
+  </div>`;
+}
+
+async function toggleFix(idx,btn,encIssue){
+  const block=document.getElementById('fix-'+idx);
+  const isOpen=block.classList.toggle('open');
+  if(!isOpen){btn.textContent='Show Fix';return;}
+  btn.textContent='Hide Fix';
+  const codeEl=document.getElementById('fix-code-'+idx);
+  if(codeEl.textContent!=='Loading...')return;
+  try{
+    const res=await fetch(`${API}/fix`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({code:editor?editor.getValue():'',source_name:decodeURIComponent(encIssue)})
+    });
+    const d=await res.json();
+    codeEl.textContent=d.suggested_fix||'No fix generated';
+    codeEl.innerHTML+=`<button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('fix-code-${idx}').innerText)">Copy</button>`;
+  }catch(e){codeEl.textContent='Error: '+e.message;}
+}
+
+function renderMetrics(d){
+  const ms  = d.model_scores || {};
+  const cv  = d.cross_validation || {};
+  const rows=[
+    ['── ENGINE SCORES (deterministic ground truth) ──',''],
+    ['Security',d.scores.security.toFixed(3)],
+    ['Complexity',d.scores.complexity.toFixed(3)],
+    ['Maintainability',d.scores.maintainability.toFixed(3)],
+    ['Overall (engine default)',d.scores.overall.toFixed(3)],
+    ['── MODEL SCORES (Qwen adjusted) ──',''],
+    ['Model Security', ms.security!=null ? ms.security.toFixed(3) : 'N/A'],
+    ['Model Complexity', ms.complexity!=null ? ms.complexity.toFixed(3) : 'N/A'],
+    ['Model Maintainability', ms.maintainability!=null ? ms.maintainability.toFixed(3) : 'N/A'],
+    ['── CROSS-VALIDATION ──',''],
+    ['CV Agreement', cv.agreement!=null ? cv.agreement.toFixed(4) : 'N/A'],
+    ['CV Confidence', cv.confidence || 'N/A'],
+    ['CV Flag', cv.flag || '—'],
+    ['── PERFORMANCE ──',''],
+    ['Parse Status', d.parse_status || 'ok'],
+    ['Processing Time', d.processing_time_ms + 'ms'],
+  ];
+  return rows.map(([k,v])=>{
+    if (v==='') {
+      return `<div class="metric-row" style="background:transparent;border:none;padding-top:10px"><span class="metric-name" style="color:var(--text3);font-size:10px;letter-spacing:.5px">${k}</span></div>`;
+    }
+    return `<div class="metric-row"><span class="metric-name">${k}</span><span class="metric-val">${v}</span></div>`;
+  }).join('');
+}
+
+function renderLLM(d){
+  // Insights as collapsible cards. Each insight has a .point field with deep multi-section text.
+  const insights = d.insights || [];
+  if (insights.length === 0) {
+    return '<div class="history-empty">No AI insights generated for this code</div>';
+  }
+  return insights.map((ins, idx) => {
+    const text = (typeof ins === 'object' && ins !== null) ? (ins.point || '') : String(ins);
+    // Light formatting: split on numbered markers (1) (2) ... to make paragraphs
+    const formatted = text.replace(/\((\d)\)\s*([A-Z][A-Z\s]*?):/g, '<br><br><strong style="color:var(--cyan)">($1) $2:</strong>')
+                          .replace(/^<br><br>/, '');
+    return `
+    <div class="insight-card ${idx===0?'open':''}" onclick="this.classList.toggle('open')">
+      <div class="insight-header">
+        <div class="insight-header-left">
+          <span class="insight-num">${idx+1}</span>
+          Deep Analysis ${idx+1}
+        </div>
+        <svg class="insight-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </div>
+      <div class="insight-body">
+        <p>${formatted}</p>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Tabs
+function switchTab(name,el){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('tab-'+name).classList.add('active');
+}
+
+// History
+function saveHistory(d){
+  const item={
+    name:document.getElementById('fileNameDisplay').textContent,
+    scores:d.scores,
+    time:new Date().toLocaleTimeString(),
+    code:editor?editor.getValue():'',
+    result:d
+  };
+  history.unshift(item);
+  if(history.length>20)history.pop();
+  renderHistoryList();
+}
+
+function renderHistoryList(){
+  const el=document.getElementById('historyList');
+  if(!history.length){el.innerHTML='<div class="history-empty">No analysis history yet</div>';return;}
+  el.innerHTML=history.map((h,i)=>`
+    <div class="history-item" onclick="loadHistory(${i})">
+      <div class="hi-name">${h.name}</div>
+      <div class="hi-scores">
+        <span style="color:#2d7df7">S:${h.scores.security.toFixed(1)}</span>
+        <span style="color:#00d4ff">C:${h.scores.complexity.toFixed(1)}</span>
+        <span style="color:#c8a84b">M:${h.scores.maintainability.toFixed(1)}</span>
+      </div>
+      <div class="hi-time">${h.time}</div>
+    </div>`).join('');
+}
+
+function loadHistory(i){
+  const h=history[i];
+  if(editor)editor.setValue(h.code);
+  document.getElementById('fileNameDisplay').textContent=h.name;
+  renderResults(h.result);
+  closeHistory();
+}
+
+function closeHistory(){document.getElementById('historyDrawer').classList.remove('open');}
+document.getElementById('historyBtn').onclick=()=>document.getElementById('historyDrawer').classList.toggle('open');
+document.getElementById('historyNavBtn').onclick=()=>document.getElementById('historyDrawer').classList.toggle('open');
+
+// Helpers
+function scoreColor(v){return v>=7?'#22c55e':v>=4?'#f59e0b':'#ef4444';}
+function gradeFromScore(v){
+  if(v>=9)return'Excellent';if(v>=7)return'Good';if(v>=5)return'Moderate';if(v>=3)return'Poor';return'Critical';
+}
+
+// Drag & drop
+const ew=document.getElementById('editorWrap');
+ew.addEventListener('dragover',e=>{e.preventDefault();ew.style.outline='2px dashed #2d7df7';});
+ew.addEventListener('dragleave',()=>{ew.style.outline='';});
+ew.addEventListener('drop',e=>{
+  e.preventDefault();ew.style.outline='';
+  const f=e.dataTransfer.files[0];
+  if(f&&f.name.endsWith('.py')){
+    document.getElementById('fileNameDisplay').textContent=f.name;
+    const r=new FileReader();
+    r.onload=ev=>{if(editor)editor.setValue(ev.target.result);};
+    r.readAsText(f);
+  }
+});
+
+// Apply persisted weights to UI immediately (before first analysis)
+applyWeightsToUI();
+</script>
+</body>
+</html>
